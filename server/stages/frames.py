@@ -38,9 +38,15 @@ def run(job, work: Path, preset):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     job.update(message="selecting sharpest frames", progress=0.05)
+    # extract ~3x the target so best-n has real candidates (default 10 fps +
+    # min-buffer 3 caps selection at duration*10/3 frames on short videos)
+    duration = _ffprobe_duration(video)
+    fps = min(30, max(10, -(-3 * preset.frames // max(int(duration), 1))))
     try:
         run_subprocess(job, [
             _SHARP_FRAMES_BIN, str(video), str(out_dir),
+            "--fps", str(fps),
+            "--min-buffer", "2",
             "--num-frames", str(preset.frames),
             "--format", "jpg",
             "--selection-method", "best-n",
