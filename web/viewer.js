@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "/vendor/three/OrbitControls.js";
-import { SplatMesh } from "@sparkjsdev/spark";
+import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 
 // --- tiny inline PLY point-cloud parser: x,y,z + optional r,g,b -------------
 // Supports ascii and binary_little_endian/big_endian, any property order.
@@ -63,7 +63,6 @@ function parsePLY(buffer) {
 export function createViewer(canvas) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a0b0c);
-  scene.fog = new THREE.Fog(0x0a0b0c, 5, 80);
 
   // COLMAP/Spark convention is +Y down; flip the whole world upright.
   const world = new THREE.Group();
@@ -75,6 +74,7 @@ export function createViewer(canvas) {
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  scene.add(new SparkRenderer({ renderer })); // required for SplatMesh to draw
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
