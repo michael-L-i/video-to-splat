@@ -9,3 +9,4 @@ vendor/brush_src/
 *.ply
 *.spz
 *.sog
+.playwright-mcp/

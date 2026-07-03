@@ -3,6 +3,7 @@
 Runs the `da3` CLI in a subprocess — DA3's torch and pycolmap's bundled OpenMP
 cannot coexist in one process (libomp clash).
 """
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -12,7 +13,7 @@ import pycolmap
 from ..pipeline import run_subprocess
 from .sfm_common import cameras_json, write_sparse_ply
 
-DA3_MODEL = "depth-anything/DA3-LARGE"
+DA3_MODEL = os.environ.get("DA3_MODEL", "depth-anything/DA3-LARGE")
 
 
 def run(job, work: Path, preset):

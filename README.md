@@ -38,7 +38,7 @@ Upload a video, pick a preset, watch it build. Presets:
 
 ## Notes
 
-- Optional DA3 pose backend: `uv sync --group da3` (Python 3.12 venv, installs PyTorch).
+- Optional DA3 pose backend: `uv sync --group da3` (Python 3.12 venv, installs PyTorch). Uses `depth-anything/DA3-LARGE` by default; override with `DA3_MODEL=depth-anything/DA3-SMALL ./run.sh` for speed.
 - Optional `.spz`/`.sog` export + floater cleanup uses `npx @playcanvas/splat-transform` (needs Node).
 - Why not LingBot-World? It's an image→video *world generator* (28B params, CUDA-only, no 3D output) — the wrong tool for video→3D reconstruction, and it can't run on a Mac. This project uses the reconstruction stack that modern world-model papers themselves use for geometry.
 
