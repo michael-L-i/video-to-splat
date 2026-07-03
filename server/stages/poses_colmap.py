@@ -2,19 +2,7 @@ from pathlib import Path
 
 import pycolmap
 
-
-def _write_sparse_ply(path: Path, recon: "pycolmap.Reconstruction"):
-    points = recon.points3D
-    with open(path, "w") as f:
-        f.write("ply\nformat ascii 1.0\n")
-        f.write(f"element vertex {len(points)}\n")
-        f.write("property float x\nproperty float y\nproperty float z\n")
-        f.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
-        f.write("end_header\n")
-        for p in points.values():
-            x, y, z = p.xyz
-            r, g, b = p.color
-            f.write(f"{x} {y} {z} {int(r)} {int(g)} {int(b)}\n")
+from .sfm_common import cameras_json, write_sparse_ply
 
 
 def run(job, work: Path, preset):
@@ -88,16 +76,8 @@ def run(job, work: Path, preset):
         output_type="COLMAP",
     )
 
-    _write_sparse_ply(work / "sparse.ply", best)
-
-    cameras = []
-    for image in best.images.values():
-        world_from_cam = image.cam_from_world().inverse()
-        qx, qy, qz, qw = world_from_cam.rotation.quat
-        cameras.append({
-            "position": world_from_cam.translation.tolist(),
-            "rotation": [qw, qx, qy, qz],
-        })
+    write_sparse_ply(work / "sparse.ply", best)
+    cameras = cameras_json(best)
 
     job.update(
         progress=1.0,
