@@ -1,0 +1,205 @@
+import * as THREE from "three";
+import { OrbitControls } from "/vendor/three/OrbitControls.js";
+import { SplatMesh } from "@sparkjsdev/spark";
+
+// --- tiny inline PLY point-cloud parser: x,y,z + optional r,g,b -------------
+// Supports ascii and binary_little_endian/big_endian, any property order.
+function parsePLY(buffer) {
+  const SIZES = { char: 1, uchar: 1, int8: 1, uint8: 1, short: 2, ushort: 2, int16: 2, uint16: 2,
+    int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4, double: 8, float64: 8 };
+  const head = new TextDecoder("ascii").decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 20000)));
+  const end = head.indexOf("end_header");
+  if (end === -1) throw new Error("not a PLY file");
+  const headerEnd = end + "end_header\n".length;
+  const lines = head.slice(0, end).split("\n").map((l) => l.trim()).filter(Boolean);
+
+  let format = "ascii", count = 0, inVertex = false;
+  const props = [];
+  for (const line of lines) {
+    const p = line.split(/\s+/);
+    if (p[0] === "format") format = p[1];
+    else if (p[0] === "element") { inVertex = p[1] === "vertex"; if (inVertex) count = +p[2]; }
+    else if (p[0] === "property" && inVertex) props.push({ type: p[1], name: p[2] });
+  }
+  const find = (re) => props.findIndex((p) => re.test(p.name));
+  const xi = find(/^x$/), yi = find(/^y$/), zi = find(/^z$/);
+  const ri = find(/^(red|r)$/), gi = find(/^(green|g)$/), bi = find(/^(blue|b)$/);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const setColor = (v, c) => colors.set(ri >= 0 ? [c[ri] / 255, c[gi] / 255, c[bi] / 255] : [0.72, 0.72, 0.72], v * 3);
+
+  if (format === "ascii") {
+    const rows = new TextDecoder("ascii").decode(buffer.slice(headerEnd)).trim().split("\n");
+    for (let v = 0; v < count; v++) {
+      const f = rows[v].trim().split(/\s+/).map(Number);
+      positions.set([f[xi], f[yi], f[zi]], v * 3);
+      setColor(v, f);
+    }
+  } else {
+    const little = format === "binary_little_endian";
+    const dv = new DataView(buffer, headerEnd);
+    let o = 0;
+    const readers = {
+      float: () => dv.getFloat32(o, little), float32: () => dv.getFloat32(o, little),
+      double: () => dv.getFloat64(o, little), float64: () => dv.getFloat64(o, little),
+      uchar: () => dv.getUint8(o), uint8: () => dv.getUint8(o),
+      char: () => dv.getInt8(o), int8: () => dv.getInt8(o),
+      ushort: () => dv.getUint16(o, little), uint16: () => dv.getUint16(o, little),
+      short: () => dv.getInt16(o, little), int16: () => dv.getInt16(o, little),
+      uint: () => dv.getUint32(o, little), uint32: () => dv.getUint32(o, little),
+      int: () => dv.getInt32(o, little), int32: () => dv.getInt32(o, little),
+    };
+    for (let v = 0; v < count; v++) {
+      const vals = new Array(props.length);
+      for (let p = 0; p < props.length; p++) { vals[p] = readers[props[p].type](); o += SIZES[props[p].type]; }
+      positions.set([vals[xi], vals[yi], vals[zi]], v * 3);
+      setColor(v, vals);
+    }
+  }
+  return { positions, colors, count };
+}
+
+// --- viewer ------------------------------------------------------------------
+export function createViewer(canvas) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0b0c);
+  scene.fog = new THREE.Fog(0x0a0b0c, 5, 80);
+
+  // COLMAP/Spark convention is +Y down; flip the whole world upright.
+  const world = new THREE.Group();
+  world.rotation.x = Math.PI;
+  scene.add(world);
+
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
+  camera.position.set(2.2, 1.4, 3.2);
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.target.set(0, 0, 0);
+
+  let pointCloud = null, frusta = null, splat = null;
+  let radius = 3, frustaVisible = true;
+  let loading = false, nextUrl = null, currentCheckpointUrl = null;
+
+  function resize() {
+    const el = canvas.parentElement;
+    const w = el.clientWidth, h = el.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(canvas.parentElement);
+  resize();
+
+  function percentile(sorted, p) { return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]; }
+
+  // fit camera to the parsed (pre-flip) point positions, clamping outliers
+  function fitToPositions(positions) {
+    const n = positions.length / 3;
+    const xs = new Array(n), ys = new Array(n), zs = new Array(n);
+    for (let i = 0; i < n; i++) { xs[i] = positions[i * 3]; ys[i] = positions[i * 3 + 1]; zs[i] = positions[i * 3 + 2]; }
+    xs.sort((a, b) => a - b); ys.sort((a, b) => a - b); zs.sort((a, b) => a - b);
+    const lo = [percentile(xs, 0.05), percentile(ys, 0.05), percentile(zs, 0.05)];
+    const hi = [percentile(xs, 0.95), percentile(ys, 0.95), percentile(zs, 0.95)];
+    // world group is rotated 180deg about X: (x,y,z) -> (x,-y,-z)
+    const cx = (lo[0] + hi[0]) / 2, cy = -(lo[1] + hi[1]) / 2, cz = -(lo[2] + hi[2]) / 2;
+    const size = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 0.05);
+    radius = size / 2;
+    const dist = radius * 2.4;
+    camera.position.set(cx + dist * 0.55, cy + dist * 0.4, cz + dist * 0.75);
+    camera.near = Math.max(radius * 0.01, 0.001);
+    camera.far = radius * 60;
+    camera.updateProjectionMatrix();
+    controls.target.set(cx, cy, cz);
+    controls.update();
+  }
+
+  function loadSparse(url) {
+    fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        const { positions, colors } = parsePLY(buf);
+        fitToPositions(positions);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        const mat = new THREE.PointsMaterial({ size: Math.max(radius * 0.004, 0.004), vertexColors: true, sizeAttenuation: true });
+        if (pointCloud) { world.remove(pointCloud); pointCloud.geometry.dispose(); pointCloud.material.dispose(); }
+        pointCloud = new THREE.Points(geo, mat);
+        pointCloud.visible = !splat;
+        world.add(pointCloud);
+      })
+      .catch((e) => console.error("sparse cloud load failed:", e));
+  }
+
+  function setCameras(cameras) {
+    if (frusta) { world.remove(frusta); frusta.geometry.dispose(); frusta.material.dispose(); frusta = null; }
+    if (!cameras || !cameras.length) return;
+    const d = Math.max(radius * 0.06, 0.05), hw = d * 0.5, hh = d * 0.375;
+    const corners = [[-hw, -hh, -d], [hw, -hh, -d], [hw, hh, -d], [-hw, hh, -d]];
+    const q = new THREE.Quaternion(), p = new THREE.Vector3(), v = new THREE.Vector3();
+    const pos = [];
+    for (const cam of cameras) {
+      const [qw, qx, qy, qz] = cam.rotation;
+      q.set(qx, qy, qz, qw); // reorder cam-to-world [qw,qx,qy,qz] -> THREE (x,y,z,w)
+      p.set(cam.position[0], cam.position[1], cam.position[2]);
+      const w = corners.map((c) => v.set(c[0], c[1], c[2]).applyQuaternion(q).add(p).clone());
+      for (const c of w) pos.push(p.x, p.y, p.z, c.x, c.y, c.z); // apex -> corner
+      for (let i = 0; i < 4; i++) { const a = w[i], b = w[(i + 1) % 4]; pos.push(a.x, a.y, a.z, b.x, b.y, b.z); } // base
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    frusta = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xe3a53d, transparent: true, opacity: 0.5 }));
+    frusta.visible = frustaVisible;
+    world.add(frusta);
+  }
+
+  function setFrustaVisible(v) { frustaVisible = v; if (frusta) frusta.visible = v; }
+
+  function loadCheckpoint(url) {
+    if (url === currentCheckpointUrl) return;
+    if (loading) { nextUrl = url; return; }
+    loading = true;
+    doLoadCheckpoint(url);
+  }
+
+  async function doLoadCheckpoint(url) {
+    try {
+      const mesh = new SplatMesh({ url });
+      await mesh.initialized;
+      world.add(mesh);
+      if (splat) { world.remove(splat); splat.dispose(); }
+      splat = mesh;
+      currentCheckpointUrl = url;
+      if (pointCloud) pointCloud.visible = false;
+    } catch (e) {
+      console.error("checkpoint load failed:", e);
+    } finally {
+      loading = false;
+      if (nextUrl) { const u = nextUrl; nextUrl = null; loadCheckpoint(u); }
+    }
+  }
+
+  function reset() {
+    if (pointCloud) { world.remove(pointCloud); pointCloud.geometry.dispose(); pointCloud.material.dispose(); pointCloud = null; }
+    if (frusta) { world.remove(frusta); frusta.geometry.dispose(); frusta.material.dispose(); frusta = null; }
+    if (splat) { world.remove(splat); splat.dispose(); splat = null; }
+    currentCheckpointUrl = null; nextUrl = null; loading = false; radius = 3;
+    camera.position.set(2.2, 1.4, 3.2);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
+
+  return { loadSparse, setCameras, setFrustaVisible, loadCheckpoint, reset };
+}
