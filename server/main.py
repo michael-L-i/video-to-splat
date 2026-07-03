@@ -49,6 +49,14 @@ async def create_job(
     return {"job_id": job_id}
 
 
+@app.get("/api/jobs/active")
+async def active_job():
+    for job_id, job in reversed(JOBS.items()):
+        if job.state["stage"] not in pipeline.TERMINAL_STAGES:
+            return {"job_id": job_id}
+    return {"job_id": None}
+
+
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str):
     job = JOBS.get(job_id)

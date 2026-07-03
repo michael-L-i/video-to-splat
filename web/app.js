@@ -321,10 +321,18 @@ function resetToIdle() {
 }
 
 // ------------------------------------------------------------------- init --
-(function init() {
-  const saved = sessionStorage.getItem("vts_job");
+(async function init() {
+  let saved = sessionStorage.getItem("vts_job");
+  if (!saved) {
+    // attach to a job started elsewhere (another tab, or via the API)
+    try {
+      const { job_id } = await (await fetch("/api/jobs/active")).json();
+      if (job_id) saved = job_id;
+    } catch { /* older server without the endpoint */ }
+  }
   if (saved) {
     jobId = saved;
+    sessionStorage.setItem("vts_job", saved);
     mount("running");
     connectEvents(saved);
   } else {

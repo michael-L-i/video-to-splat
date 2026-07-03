@@ -3,6 +3,7 @@
 ## Endpoints
 
 - `POST /api/jobs` — multipart form: `video` (file), `preset` (`preview|high|max`, default `high`), `pose_backend` (`colmap|da3`, default `colmap`). Returns `{"job_id": str}`. 409 if a job is already running.
+- `GET /api/jobs/active` — `{"job_id": str | null}` for the currently running job (lets any tab attach).
 - `GET /api/jobs/{id}` — JSON snapshot of job state (same shape as SSE `state` payload).
 - `GET /api/jobs/{id}/events` — SSE stream. On connect, emits current state, then updates.
 - `POST /api/jobs/{id}/cancel` — cancel the job (kills running stage process).
