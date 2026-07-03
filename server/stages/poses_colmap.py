@@ -18,7 +18,9 @@ def run(job, work: Path, preset):
         database_path=db_path,
         image_path=frames_dir,
         camera_mode=pycolmap.CameraMode.SINGLE,
-        reader_options=pycolmap.ImageReaderOptions(camera_model="OPENCV"),
+        # SIMPLE_RADIAL: fx=fy + one distortion param. Richer models (OPENCV)
+        # overfit garbage intrinsics when the init pair is forward-dominated
+        reader_options=pycolmap.ImageReaderOptions(camera_model="SIMPLE_RADIAL"),
         extraction_options=pycolmap.FeatureExtractionOptions(
             sift=pycolmap.SiftExtractionOptions(
                 estimate_affine_shape=True,
@@ -45,8 +47,15 @@ def run(job, work: Path, preset):
     job.update(progress=0.5, message="running incremental mapping")
     sparse_dir = colmap_dir / "sparse"
     sparse_dir.mkdir(parents=True, exist_ok=True)
+    # video walkthroughs are forward-motion dominated: defaults (16° init
+    # triangulation angle, forward-motion cap) reject every init pair
+    opts = pycolmap.IncrementalPipelineOptions()
+    opts.mapper.init_min_tri_angle = 4.0
+    opts.mapper.init_max_forward_motion = 1.0
+    opts.mapper.abs_pose_min_num_inliers = 20
     reconstructions = pycolmap.incremental_mapping(
         database_path=db_path, image_path=frames_dir, output_path=sparse_dir,
+        options=opts,
     )
     if not reconstructions:
         raise RuntimeError(
