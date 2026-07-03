@@ -1,0 +1,20 @@
+[project]
+name = "video-to-splat"
+version = "0.1.0"
+description = "Local video -> 3D Gaussian Splat pipeline for Apple Silicon with a live web UI"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "pycolmap>=3.11",
+    "sharp-frames>=0.2",
+    "pillow>=10",
+    "numpy>=1.26",
+]
+
+[dependency-groups]
+da3 = ["awesome-depth-anything-3"]
+
+[tool.uv]
+package = false

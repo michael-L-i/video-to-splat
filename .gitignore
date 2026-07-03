@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+jobs/
+vendor/brush
+vendor/brush_src/
+*.ply
+*.spz
+*.sog
