@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup for video-to-splat on Apple Silicon macOS.
+# Setup for Splat Local on Apple Silicon macOS.
 set -euo pipefail
 cd "$(dirname "$0")"
 

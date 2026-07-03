@@ -1,5 +1,5 @@
 [project]
-name = "video-to-splat"
+name = "splat-local"
 version = "0.1.0"
 description = "Local video -> 3D Gaussian Splat pipeline for Apple Silicon with a live web UI"
 requires-python = ">=3.11"
