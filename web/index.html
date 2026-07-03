@@ -121,6 +121,21 @@
     border-radius: 3px;
   }
 
+  .nav-hint {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    background: rgba(10,11,12,.55);
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    pointer-events: none;
+  }
+
   /* ---------- generic panel bits ---------- */
   .eyebrow {
     font-family: var(--font-mono);
@@ -277,6 +292,7 @@
         <input type="checkbox" id="frustaCheckbox" checked />
         camera frusta
       </label>
+      <div class="nav-hint">drag orbit · scroll zoom · ↑↓ move · ←→ turn · WASD</div>
     </main>
   </div>
 

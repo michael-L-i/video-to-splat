@@ -85,6 +85,43 @@ export function createViewer(canvas) {
   let radius = 3, frustaVisible = true;
   let loading = false, nextUrl = null, currentCheckpointUrl = null;
 
+  // --- keyboard fly navigation: arrows/WASD move, left/right arrows turn ---
+  const NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"]);
+  const keys = new Set();
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (!NAV_KEYS.has(k) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = document.activeElement;
+    if (t && /^(input|select|textarea|button)$/i.test(t.tagName)) return;
+    keys.add(k);
+    e.preventDefault();
+  });
+  window.addEventListener("keyup", (e) => keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+  window.addEventListener("blur", () => keys.clear());
+
+  const _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _move = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+  function updateNav(dt) {
+    if (!keys.size) return;
+    camera.getWorldDirection(_dir);
+    _right.crossVectors(_dir, _up).normalize();
+    _move.set(0, 0, 0);
+    if (keys.has("ArrowUp") || keys.has("w")) _move.add(_dir);
+    if (keys.has("ArrowDown") || keys.has("s")) _move.sub(_dir);
+    if (keys.has("a")) _move.sub(_right);
+    if (keys.has("d")) _move.add(_right);
+    if (_move.lengthSq()) {
+      _move.normalize().multiplyScalar(radius * 0.6 * dt); // cross the scene in a few seconds
+      camera.position.add(_move);
+      controls.target.add(_move);
+    }
+    const yaw = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
+    if (yaw) {
+      const offset = controls.target.clone().sub(camera.position);
+      offset.applyAxisAngle(_up, yaw * 1.5 * dt);
+      controls.target.copy(camera.position).add(offset);
+    }
+  }
+
   function resize() {
     const el = canvas.parentElement;
     const w = el.clientWidth, h = el.clientHeight;
@@ -195,8 +232,12 @@ export function createViewer(canvas) {
     controls.update();
   }
 
-  (function animate() {
+  let lastT = performance.now();
+  (function animate(now = lastT) {
     requestAnimationFrame(animate);
+    const dt = Math.min((now - lastT) / 1000, 0.1);
+    lastT = now;
+    updateNav(dt);
     controls.update();
     renderer.render(scene, camera);
   })();
