@@ -2,6 +2,12 @@
 
 Turn a video into a 3D Gaussian Splat — fully locally on Apple Silicon — and watch the world build itself live in your browser. Downloads as `.ply` (plus `.spz` / `.sog` when available).
 
+| 📹 input: an 11 s video walkthrough | ✨ output: interactive 3D splat, toured in the built-in viewer |
+| :--: | :--: |
+| ![input video](docs/demo/input.gif) | ![splat tour](docs/demo/splat-tour.gif) |
+
+<sub>Footage: [Pexels #7578547](https://www.pexels.com/video/video-of-a-house-interior-7578547/) (free license). Reconstructed in ~25 min end-to-end on an M5 Pro MacBook — 165 frames, COLMAP poses, 30k training steps — then explored freely with WASD/arrow keys.</sub>
+
 ## How it works
 
 ```
