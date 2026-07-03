@@ -105,8 +105,8 @@ export function createViewer(canvas) {
     camera.getWorldDirection(_dir);
     _right.crossVectors(_dir, _up).normalize();
     _move.set(0, 0, 0);
-    if (keys.has("ArrowUp") || keys.has("w")) _move.add(_dir);
-    if (keys.has("ArrowDown") || keys.has("s")) _move.sub(_dir);
+    if (keys.has("w")) _move.add(_dir);
+    if (keys.has("s")) _move.sub(_dir);
     if (keys.has("a")) _move.sub(_right);
     if (keys.has("d")) _move.add(_right);
     if (_move.lengthSq()) {
@@ -115,9 +115,15 @@ export function createViewer(canvas) {
       controls.target.add(_move);
     }
     const yaw = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0);
-    if (yaw) {
+    const pitch = (keys.has("ArrowUp") ? 1 : 0) - (keys.has("ArrowDown") ? 1 : 0);
+    if (yaw || pitch) {
       const offset = controls.target.clone().sub(camera.position);
-      offset.applyAxisAngle(_up, yaw * 1.5 * dt);
+      if (yaw) offset.applyAxisAngle(_up, yaw * 1.5 * dt);
+      if (pitch) {
+        const pitched = offset.clone().applyAxisAngle(_right, pitch * 1.2 * dt);
+        const angle = pitched.angleTo(_up);
+        if (angle > 0.09 && angle < Math.PI - 0.09) offset.copy(pitched); // don't flip over the poles
+      }
       controls.target.copy(camera.position).add(offset);
     }
   }
