@@ -7,6 +7,7 @@
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple_Silicon-Metal_%2F_MPS-black?logo=apple&logoColor=white">
   <img alt="No cloud, no CUDA" src="https://img.shields.io/badge/cloud-none-blue">
   <img alt="Python 3.12" src="https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white">
+  <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-lightgrey">
 </p>
 
 Turn a video walkthrough into a 3D Gaussian Splat and watch the scene resolve out of the fog, live, in your browser — no cloud, no CUDA, nothing leaves your Mac. Downloads as `.ply` (plus `.spz` / `.sog` when available).
